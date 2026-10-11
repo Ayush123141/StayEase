@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Wifi, Wind, Coffee, Sparkles, BedDouble, Shield, ArrowLeft } from 'lucide-react';
 import { formatCurrency, calculateNights } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../api/supabaseClient';
+import type { Room } from '../../types/database';
 
 const RoomDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -10,23 +12,77 @@ const RoomDetails: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [checkIn, setCheckIn] = useState(searchParams.get('checkIn') || '2026-11-01');
-  const [checkOut, setCheckOut] = useState(searchParams.get('checkOut') || '2026-11-04');
+  const [room, setRoom] = useState<Room | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [checkIn, setCheckIn] = useState(searchParams.get('checkIn') || '');
+  const [checkOut, setCheckOut] = useState(searchParams.get('checkOut') || '');
   const [guests, setGuests] = useState(searchParams.get('guests') || '2');
 
-  const nights = calculateNights(checkIn, checkOut);
-  const pricePerNight = 12500;
-  const subtotal = pricePerNight * (nights > 0 ? nights : 1);
+  // Set default dates if none passed
+  useEffect(() => {
+    if (!checkIn) {
+      const today = new Date();
+      const tomorrow = new Date();
+      tomorrow.setDate(today.getDate() + 2);
+      setCheckIn(today.toISOString().split('T')[0]);
+      setCheckOut(tomorrow.toISOString().split('T')[0]);
+    }
+  }, [checkIn]);
+
+  useEffect(() => {
+    const fetchRoom = async () => {
+      setLoading(true);
+      try {
+        if (id) {
+          const { data, error } = await supabase
+            .from('rooms')
+            .select('*, room_type:room_types(*)')
+            .eq('id', id)
+            .single();
+
+          if (!error && data) {
+            setRoom(data as Room);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching room details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoom();
+  }, [id]);
+
+  const nights = calculateNights(checkIn, checkOut) || 1;
+  const pricePerNight = room?.price_per_night || 6500;
+  const subtotal = pricePerNight * nights;
   const taxes = Math.round(subtotal * 0.12);
   const total = subtotal + taxes;
 
   const handleBookNow = () => {
+    const checkoutUrl = `/checkout?roomId=${room?.id || id}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`;
     if (!user) {
-      navigate(`/login?redirect=/checkout?roomId=${id}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
+      navigate(`/login?redirect=${encodeURIComponent(checkoutUrl)}`);
     } else {
-      navigate(`/checkout?roomId=${id}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
+      navigate(checkoutUrl);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="py-24 text-center">
+        <div className="animate-spin w-8 h-8 border-2 border-[#B8924A] border-t-transparent rounded-full mx-auto" />
+        <p className="text-xs uppercase tracking-wider text-[#B8924A] mt-3">Consulting Chamber Records...</p>
+      </div>
+    );
+  }
+
+  const roomTitle = room?.title || 'The Victoria Heritage Chamber';
+  const roomNumber = room?.room_number || '101';
+  const roomImage = room?.images?.[0] || 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80';
+  const roomDesc = room?.description || 'Restored colonial chamber featuring mahogany woodwork and Egyptian cotton linens.';
 
   return (
     <div className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -41,40 +97,27 @@ const RoomDetails: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2 space-y-8">
           <div className="space-y-3">
-            <span className="label-caps text-[#B8924A]">PALACE SUITE · CHAMBER 201</span>
-            <h1 className="font-serif text-4xl sm:text-5xl text-[#1C1410]">The Maharajah Grand Suite</h1>
-            <p className="text-xs text-[#1C1410]/70">750 sq.ft · Garden Facing Veranda · 2 King Beds · Max 3 Guests</p>
+            <span className="label-caps text-[#B8924A]">
+              {room?.room_type?.name || 'HERITAGE SUITE'} · CHAMBER {roomNumber}
+            </span>
+            <h1 className="font-serif text-4xl sm:text-5xl text-[#1C1410]">{roomTitle}</h1>
+            <p className="text-xs text-[#1C1410]/70">
+              {room?.size_sqft || 450} sq.ft · Courtyard & Estate Views · {room?.beds || 1} Bed · Max {room?.capacity || 2} Guests
+            </p>
           </div>
 
           <div className="overflow-hidden arched-frame border border-[#B8924A]/40 h-[420px] bg-black/10">
             <img
-              src="https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=1200&q=80"
-              alt="The Maharajah Grand Suite"
+              src={roomImage}
+              alt={roomTitle}
               className="w-full h-full object-cover"
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="h-44 rounded-md overflow-hidden border border-[#B8924A]/30">
-              <img
-                src="https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=800&q=80"
-                alt="Ensuite bathroom"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="h-44 rounded-md overflow-hidden border border-[#B8924A]/30">
-              <img
-                src="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80"
-                alt="Parlor view"
-                className="w-full h-full object-cover"
-              />
-            </div>
           </div>
 
           <div className="space-y-4 pt-4 border-t border-[#B8924A]/30">
             <h3 className="font-serif text-2xl text-[#1C1410]">Chamber Chronicle</h3>
             <p className="text-sm text-[#1C1410]/80 leading-relaxed font-light">
-              Originally designed for visiting envoys in 1964, the Maharajah Suite showcases hand-restored rosewood arches, antique Persian carpets, and hand-embroidered velvet drapery. Step through tall French casements onto your private terrace overlooking the illuminated courtyard fountains.
+              {roomDesc}
             </p>
           </div>
 
@@ -151,14 +194,15 @@ const RoomDetails: React.FC = () => {
                 >
                   <option value="1">1 Guest</option>
                   <option value="2">2 Guests</option>
-                  <option value="3">3 Guests (Max)</option>
+                  <option value="3">3 Guests</option>
+                  <option value="4">4 Guests</option>
                 </select>
               </div>
             </div>
 
             <div className="space-y-2 pt-4 border-t border-[#B8924A]/25 text-xs text-[#CFC6B4]">
               <div className="flex justify-between">
-                <span>{formatCurrency(pricePerNight)} × {nights || 1} nights</span>
+                <span>{formatCurrency(pricePerNight)} × {nights} nights</span>
                 <span className="text-[#F6EFE2] font-medium">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between">
@@ -173,13 +217,13 @@ const RoomDetails: React.FC = () => {
 
             <button
               onClick={handleBookNow}
-              className="w-full bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] py-3 rounded-[3px] border border-[#B8924A]/50 font-medium label-caps tracking-[0.2em] transition shadow-lg text-center block"
+              className="w-full bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] py-3 rounded-[3px] border border-[#B8924A]/50 font-medium label-caps tracking-[0.2em] transition shadow-lg text-center block cursor-pointer"
             >
-              Proceed to Checkout
+              Reserve Chamber
             </button>
 
             <p className="text-[11px] text-center text-[#CFC6B4]/80">
-              Guaranteed double-booking protection via Postgres btree-gist exclusion constraint.
+              Guaranteed double-booking protection enforced by database exclusion.
             </p>
           </div>
         </div>

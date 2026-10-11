@@ -1,67 +1,124 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, AlertCircle } from 'lucide-react';
 import { formatCurrency, calculateNights } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../api/supabaseClient';
+import type { Room } from '../../types/database';
 
 const Checkout: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const roomId = searchParams.get('roomId') || 'e2222222-2222-2222-2222-222222222222';
-  const checkIn = searchParams.get('checkIn') || '2026-11-01';
-  const checkOut = searchParams.get('checkOut') || '2026-11-04';
+  const roomId = searchParams.get('roomId') || '';
+  const checkIn = searchParams.get('checkIn') || '';
+  const checkOut = searchParams.get('checkOut') || '';
   const guests = parseInt(searchParams.get('guests') || '2');
 
+  const [room, setRoom] = useState<Room | null>(null);
+  const [loadingRoom, setLoadingRoom] = useState(true);
+  const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.user_metadata?.phone || '');
   const [specialRequests, setSpecialRequests] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Fetch actual room data from Supabase
+  useEffect(() => {
+    const fetchRoom = async () => {
+      if (!roomId) {
+        setLoadingRoom(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('rooms')
+          .select('*, room_type:room_types(*)')
+          .eq('id', roomId)
+          .single();
+
+        if (!error && data) {
+          setRoom(data as Room);
+        }
+      } catch (err) {
+        console.error('Error fetching room for checkout:', err);
+      } finally {
+        setLoadingRoom(false);
+      }
+    };
+
+    fetchRoom();
+  }, [roomId]);
+
   const nights = calculateNights(checkIn, checkOut) || 1;
-  const rate = 12500;
+  const rate = room?.price_per_night || 6500;
   const subtotal = rate * nights;
   const taxes = Math.round(subtotal * 0.12);
   const total = subtotal + taxes;
 
   const handleConfirmReservation = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage('');
 
     try {
-      const { data, error } = await supabase.rpc('create_booking', {
-        p_room_id: roomId,
-        p_check_in: checkIn,
-        p_check_out: checkOut,
-        p_guests: guests,
-        p_special_requests: specialRequests || null,
-      });
+      // Direct insertion or RPC into Supabase bookings table
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          user_id: user.id,
+          room_id: roomId || room?.id,
+          check_in: checkIn,
+          check_out: checkOut,
+          guests: guests,
+          total_price: total,
+          status: 'confirmed',
+          payment_status: 'pending',
+          special_requests: specialRequests || null,
+        })
+        .select()
+        .single();
 
       if (error) {
-        if (error.code === '23P01' || error.message.includes('overlapping')) {
-          setErrorMessage('Sorry, this room was just booked for those dates. Please pick other dates.');
+        // Double-booking exclusion constraint error
+        if (error.code === '23P01' || error.message.includes('overlapping') || error.message.includes('no_overlapping_bookings')) {
+          setErrorMessage('Sorry, this chamber is already reserved for these dates. Please choose other dates or select another chamber.');
         } else {
-          navigate(`/booking/demo-booking-id/confirmed?room=The%20Maharajah%20Grand%20Suite&checkIn=${checkIn}&checkOut=${checkOut}&total=${total}`);
+          setErrorMessage(error.message);
         }
       } else {
-        const bookingId = data?.id || 'res-' + Math.random().toString(36).substring(7);
-        navigate(`/booking/${bookingId}/confirmed?room=The%20Maharajah%20Grand%20Suite&checkIn=${checkIn}&checkOut=${checkOut}&total=${total}`);
+        const bookingId = data?.id;
+        navigate(`/booking/${bookingId}/confirmed?room=${encodeURIComponent(room?.title || 'Selected Chamber')}&checkIn=${checkIn}&checkOut=${checkOut}&total=${total}`);
       }
-    } catch {
-      navigate(`/booking/demo-confirmed/confirmed?room=The%20Maharajah%20Grand%20Suite&checkIn=${checkIn}&checkOut=${checkOut}&total=${total}`);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Error creating reservation.');
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (loadingRoom) {
+    return (
+      <div className="py-24 text-center">
+        <div className="animate-spin w-8 h-8 border-2 border-[#B8924A] border-t-transparent rounded-full mx-auto" />
+        <p className="text-xs uppercase tracking-wider text-[#B8924A] mt-3">Preparing Chamber Voucher...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="py-12 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
       <div className="space-y-2">
         <span className="label-caps text-[#B8924A]">SECURE RESERVATION</span>
         <h1 className="font-serif text-3xl sm:text-4xl text-[#1C1410]">Finalize Your Stay</h1>
-        <p className="text-xs text-[#1C1410]/70">Confirm guest details and payment arrangement.</p>
+        <p className="text-xs text-[#1C1410]/70">Confirm guest details and payment settlement.</p>
       </div>
 
       {errorMessage && (
@@ -82,7 +139,9 @@ const Checkout: React.FC = () => {
                 <input
                   type="text"
                   required
-                  defaultValue={user?.email ? user.email.split('@')[0] : 'Guest Patron'}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Guest Name"
                   className="w-full bg-[#F6EFE2] border border-[#B8924A]/40 rounded-[3px] text-[#1C1410] px-3 py-2 text-sm focus:outline-none focus:border-[#5B1A1F]"
                 />
               </div>
@@ -92,7 +151,9 @@ const Checkout: React.FC = () => {
                 <input
                   type="email"
                   required
-                  defaultValue={user?.email || 'patron@example.com'}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="patron@example.com"
                   className="w-full bg-[#F6EFE2] border border-[#B8924A]/40 rounded-[3px] text-[#1C1410] px-3 py-2 text-sm focus:outline-none focus:border-[#5B1A1F]"
                 />
               </div>
@@ -102,6 +163,8 @@ const Checkout: React.FC = () => {
               <label className="label-caps text-[#1C1410]/80 block mb-1">Contact Phone Number</label>
               <input
                 type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 placeholder="+91 98200 00000"
                 className="w-full bg-[#F6EFE2] border border-[#B8924A]/40 rounded-[3px] text-[#1C1410] px-3 py-2 text-sm focus:outline-none focus:border-[#5B1A1F]"
               />
@@ -134,7 +197,7 @@ const Checkout: React.FC = () => {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] py-3.5 rounded-[3px] border border-[#B8924A]/50 font-medium label-caps tracking-[0.2em] transition shadow-lg text-center"
+            className="w-full bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] py-3.5 rounded-[3px] border border-[#B8924A]/50 font-medium label-caps tracking-[0.2em] transition shadow-lg text-center cursor-pointer"
           >
             {submitting ? 'Confirming with Concierge...' : 'Confirm Reservation'}
           </button>
@@ -147,7 +210,7 @@ const Checkout: React.FC = () => {
             <div className="space-y-3 text-xs text-[#CFC6B4] border-b border-[#B8924A]/30 pb-4">
               <div>
                 <span className="label-caps text-[#D9BC82] block">Chamber</span>
-                <span className="font-serif text-lg text-[#F6EFE2]">The Maharajah Grand Suite</span>
+                <span className="font-serif text-lg text-[#F6EFE2]">{room?.title || 'Selected Chamber'}</span>
               </div>
               <div>
                 <span className="label-caps text-[#D9BC82] block">Stay Period</span>
@@ -165,7 +228,7 @@ const Checkout: React.FC = () => {
                 <span className="text-[#F6EFE2]">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Taxes & Heritage Fee</span>
+                <span>Taxes & Heritage Fee (12%)</span>
                 <span className="text-[#F6EFE2]">{formatCurrency(taxes)}</span>
               </div>
               <div className="flex justify-between pt-3 border-t border-[#B8924A]/30 text-sm text-[#F6EFE2] font-bold">
@@ -176,7 +239,7 @@ const Checkout: React.FC = () => {
 
             <div className="pt-2 flex items-center space-x-2 text-[11px] text-[#CFC6B4]/80">
               <ShieldCheck className="w-4 h-4 text-[#D9BC82] shrink-0" />
-              <span>Complimentary cancellation up to 48 hours prior to arrival.</span>
+              <span>Double-booking protected by database constraint.</span>
             </div>
           </div>
         </div>

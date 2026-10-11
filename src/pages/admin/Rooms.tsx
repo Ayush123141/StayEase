@@ -1,71 +1,87 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { formatCurrency } from '../../lib/format';
+import { supabase } from '../../api/supabaseClient';
+import type { Room } from '../../types/database';
 
 const AdminRooms: React.FC = () => {
-  const [rooms, setRooms] = useState([
-    {
-      id: '1',
-      room_number: '101',
-      title: 'The Victoria Heritage Chamber',
-      type: 'Deluxe Heritage Room',
-      price: 6500,
-      capacity: 2,
-      is_active: true
-    },
-    {
-      id: '2',
-      room_number: '201',
-      title: 'The Maharajah Grand Suite',
-      type: 'Executive Palace Suite',
-      price: 12500,
-      capacity: 3,
-      is_active: true
-    },
-    {
-      id: '3',
-      room_number: '301',
-      title: 'Imperial Governor Penthouse',
-      type: 'Royal Presidential Suite',
-      price: 24000,
-      capacity: 4,
-      is_active: true
-    },
-    {
-      id: '4',
-      room_number: '102',
-      title: 'Courtyard Garden Retreat',
-      type: 'Courtyard Classic',
-      price: 4800,
-      capacity: 2,
-      is_active: true
-    }
-  ]);
-
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  
   const [newTitle, setNewTitle] = useState('');
   const [newNumber, setNewNumber] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newCapacity, setNewCapacity] = useState('2');
+  const [newDesc, setNewDesc] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleAddRoom = (e: React.FormEvent) => {
+  const fetchRooms = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('*, room_type:room_types(*)')
+        .order('room_number', { ascending: true });
+
+      if (!error && data) {
+        setRooms(data as Room[]);
+      }
+    } catch (err) {
+      console.error('Error fetching rooms:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRooms();
+  }, []);
+
+  const handleAddRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    setRooms([
-      ...rooms,
-      {
-        id: Date.now().toString(),
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('rooms').insert({
         room_number: newNumber,
         title: newTitle,
-        type: 'Deluxe Heritage Room',
-        price: Number(newPrice),
+        description: newDesc || 'Heritage appointed chamber with classical woodwork and courtyard views.',
+        price_per_night: Number(newPrice),
         capacity: Number(newCapacity),
-        is_active: true
+        beds: 1,
+        images: ['https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80'],
+        is_active: true,
+      });
+
+      if (!error) {
+        setModalOpen(false);
+        setNewTitle('');
+        setNewNumber('');
+        setNewPrice('');
+        setNewDesc('');
+        fetchRooms();
+      } else {
+        alert('Could not add room: ' + error.message);
       }
-    ]);
-    setModalOpen(false);
-    setNewTitle('');
-    setNewNumber('');
-    setNewPrice('');
+    } catch (err: any) {
+      alert('Error: ' + err?.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteRoom = async (roomId: string) => {
+    if (!confirm('Are you sure you want to remove this room from the live database?')) return;
+    try {
+      const { error } = await supabase.from('rooms').delete().eq('id', roomId);
+      if (!error) {
+        setRooms(rooms.filter((r) => r.id !== roomId));
+      } else {
+        alert('Could not delete room: ' + error.message);
+      }
+    } catch (err: any) {
+      alert('Error: ' + err?.message);
+    }
   };
 
   return (
@@ -74,12 +90,12 @@ const AdminRooms: React.FC = () => {
         <div>
           <span className="label-caps text-[#B8924A]">INVENTORY REPOSITORY</span>
           <h1 className="font-serif text-3xl sm:text-4xl text-[#1C1410]">Chambers & Suites Catalog</h1>
-          <p className="text-xs text-[#1C1410]/70">Configure room pricing, capacities, and active availability.</p>
+          <p className="text-xs text-[#1C1410]/70">Live chamber inventory stored directly in your Supabase database.</p>
         </div>
 
         <button
           onClick={() => setModalOpen(true)}
-          className="bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] text-xs uppercase tracking-[0.18em] px-4 py-2.5 rounded-[3px] border border-[#B8924A]/40 flex items-center space-x-2 self-start"
+          className="bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] text-xs uppercase tracking-[0.18em] px-4 py-2.5 rounded-[3px] border border-[#B8924A]/40 flex items-center space-x-2 self-start cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Add New Chamber</span>
@@ -87,48 +103,52 @@ const AdminRooms: React.FC = () => {
       </div>
 
       <div className="bg-[#EADFC8] p-6 rounded-lg border border-[#B8924A]/30">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-[#1C1410]">
-            <thead>
-              <tr className="border-b border-[#B8924A]/30 text-[#B8924A] label-caps">
-                <th className="py-2.5">Number</th>
-                <th className="py-2.5">Chamber Title</th>
-                <th className="py-2.5">Category</th>
-                <th className="py-2.5">Price / Night</th>
-                <th className="py-2.5">Capacity</th>
-                <th className="py-2.5">Status</th>
-                <th className="py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#B8924A]/15">
-              {rooms.map((r) => (
-                <tr key={r.id}>
-                  <td className="py-3 font-mono font-bold text-[#5B1A1F]">{r.room_number}</td>
-                  <td className="py-3 font-medium">{r.title}</td>
-                  <td className="py-3 text-[#1C1410]/70">{r.type}</td>
-                  <td className="py-3 font-semibold text-[#5B1A1F]">{formatCurrency(r.price)}</td>
-                  <td className="py-3">{r.capacity} Guests</td>
-                  <td className="py-3">
-                    <span className="px-2 py-0.5 rounded text-[10px] label-caps border border-[#0F2A24] text-[#0F2A24] bg-[#0F2A24]/10">
-                      Active
-                    </span>
-                  </td>
-                  <td className="py-3 text-right space-x-2">
-                    <button className="text-gray-600 hover:text-[#1C1410]">
-                      <Edit className="w-3.5 h-3.5 inline" />
-                    </button>
-                    <button
-                      onClick={() => setRooms(rooms.filter((item) => item.id !== r.id))}
-                      className="text-[#5B1A1F] hover:text-[#782329]"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 inline" />
-                    </button>
-                  </td>
+        {loading ? (
+          <div className="py-12 text-center text-xs text-[#B8924A] uppercase tracking-wider">
+            Loading Live Chambers...
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-[#1C1410]">
+              <thead>
+                <tr className="border-b border-[#B8924A]/30 text-[#B8924A] label-caps">
+                  <th className="py-2.5">Number</th>
+                  <th className="py-2.5">Chamber Title</th>
+                  <th className="py-2.5">Category</th>
+                  <th className="py-2.5">Price / Night</th>
+                  <th className="py-2.5">Capacity</th>
+                  <th className="py-2.5">Status</th>
+                  <th className="py-2.5 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[#B8924A]/15">
+                {rooms.map((r) => (
+                  <tr key={r.id}>
+                    <td className="py-3 font-mono font-bold text-[#5B1A1F]">{r.room_number}</td>
+                    <td className="py-3 font-medium">{r.title}</td>
+                    <td className="py-3 text-[#1C1410]/70">{r.room_type?.name || 'Chamber'}</td>
+                    <td className="py-3 font-semibold text-[#5B1A1F]">{formatCurrency(r.price_per_night)}</td>
+                    <td className="py-3">{r.capacity} Guests</td>
+                    <td className="py-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] label-caps border border-[#0F2A24] text-[#0F2A24] bg-[#0F2A24]/10">
+                        {r.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <button
+                        onClick={() => handleDeleteRoom(r.id)}
+                        className="text-[#5B1A1F] hover:text-[#782329] cursor-pointer"
+                        title="Delete Chamber"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 inline" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {modalOpen && (
@@ -190,6 +210,17 @@ const AdminRooms: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="label-caps text-[#1C1410] block mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  placeholder="Chamber chronicles, view, features..."
+                  className="w-full bg-[#F6EFE2] border border-[#B8924A]/40 rounded px-3 py-2 text-sm focus:outline-none"
+                />
+              </div>
+
               <div className="pt-3 flex justify-end space-x-3">
                 <button
                   type="button"
@@ -200,9 +231,10 @@ const AdminRooms: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] px-5 py-2 text-xs uppercase tracking-wider rounded"
+                  disabled={submitting}
+                  className="bg-[#5B1A1F] hover:bg-[#782329] text-[#F6EFE2] px-5 py-2 text-xs uppercase tracking-wider rounded cursor-pointer"
                 >
-                  Save Chamber
+                  {submitting ? 'Saving...' : 'Save Chamber'}
                 </button>
               </div>
             </form>
