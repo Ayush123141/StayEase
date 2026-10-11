@@ -1,48 +1,62 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import MainLayout from './layouts/MainLayout';
-import Dashboard from './pages/Dashboard';
-import Members from './pages/Members';
-import Payments from './pages/Payments';
-import Trainers from './pages/Trainers';
-import Locations from './pages/Locations';
-import Plans from './pages/Plans';
-import Login from './pages/Login';
+import PublicLayout from './layouts/PublicLayout';
+import AdminLayout from './layouts/AdminLayout';
+import Home from './pages/public/Home';
+import Rooms from './pages/public/Rooms';
+import RoomDetails from './pages/public/RoomDetails';
+import Checkout from './pages/public/Checkout';
+import BookingConfirmed from './pages/public/BookingConfirmed';
+import Styleguide from './pages/public/Styleguide';
+import Login from './pages/auth/Login';
+import MyBookings from './pages/account/MyBookings';
+import AdminDashboard from './pages/admin/Dashboard';
+import AdminRooms from './pages/admin/Rooms';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// Protected Route Wrapper
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) return <div>Loading...</div>;
-  if (!user) return <Navigate to="/login" />;
-  
-  return children;
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { loading } = useAuth();
+  if (loading) return <div className="p-8 text-center text-[#B8924A]">Loading registers...</div>;
+  return <>{children}</>;
 };
-
-
 
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public Route */}
+          {/* Public Guest Pages */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/rooms" element={<Rooms />} />
+            <Route path="/rooms/:id" element={<RoomDetails />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/booking/:id/confirmed" element={<BookingConfirmed />} />
+            <Route path="/account/bookings" element={<MyBookings />} />
+            <Route path="/styleguide" element={<Styleguide />} />
+          </Route>
+
+          {/* Authentication */}
           <Route path="/login" element={<Login />} />
 
-          {/* Protected Routes */}
-          <Route path="/" element={
-            <ProtectedRoute>
-              <MainLayout />
-            </ProtectedRoute>
-          }>
-            <Route index element={<Dashboard />} />
-            <Route path="members" element={<Members />} />
-            <Route path="plans" element={<Plans />} />
-            <Route path="payments" element={<Payments />} />
-            <Route path="trainers" element={<Trainers />} />
-            <Route path="locations" element={<Locations />} />
+          {/* Admin & Staff Management Portal */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
+            <Route path="rooms" element={<AdminRooms />} />
+            <Route path="bookings" element={<AdminDashboard />} />
+            <Route path="guests" element={<AdminDashboard />} />
+            <Route path="reports" element={<AdminDashboard />} />
           </Route>
+
+          {/* Catch-all redirect to Home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </AuthProvider>

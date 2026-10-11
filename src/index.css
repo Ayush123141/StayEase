@@ -1,30 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary-50: #f0f9ff;
-  --color-primary-100: #e0f2fe;
-  --color-primary-200: #bae6fd;
-  --color-primary-300: #7dd3fc;
-  --color-primary-400: #38bdf8;
-  --color-primary-500: #0ea5e9;
-  --color-primary-600: #0284c7;
-  --color-primary-700: #0369a1;
-  --color-primary-800: #075985;
-  --color-primary-900: #0c4a6e;
-  --color-primary-950: #082f49;
-  
-  --radius-3xl: 1.5rem;
-  --radius-4xl: 2rem;
+  --color-ivory: #F6EFE2;
+  --color-parchment: #EADFC8;
+  --color-espresso: #1C1410;
+  --color-bottle: #0F2A24;
+  --color-bottle-700: #17403A;
+  --color-oxblood: #5B1A1F;
+  --color-gold: #B8924A;
+  --color-gold-light: #D9BC82;
+  --color-mist: #CFC6B4;
 }
 
 :root {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
-  line-height: 1.5;
+  font-family: 'Jost', system-ui, -apple-system, sans-serif;
+  line-height: 1.7;
   font-weight: 400;
 
-  color-scheme: dark;
-  color: #f1f5f9;
-  background-color: #020617;
+  color: #1C1410;
+  background-color: #F6EFE2;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -36,31 +30,101 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #F6EFE2;
+  color: #1C1410;
+  position: relative;
 }
 
-/* Glassmorphism Utility */
+/* Subtle Film / Paper Grain Overlay */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Typography styles */
+.font-serif {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+.font-sans {
+  font-family: 'Jost', system-ui, sans-serif;
+}
+
+.label-caps {
+  font-family: 'Jost', sans-serif;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  font-weight: 500;
+}
+
+.lining-nums {
+  font-variant-numeric: lining-nums;
+}
+
+/* Glassmorphism System per §2A */
 .glass {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(135deg, rgba(246, 239, 226, 0.14), rgba(246, 239, 226, 0.04));
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(217, 188, 130, 0.28);
+  border-top-color: rgba(255, 255, 255, 0.35);
+  border-left-color: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 20px 50px -20px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 0 40px rgba(217, 188, 130, 0.04);
+  border-radius: 10px;
+  color: #F6EFE2;
 }
 
-.glass-light {
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+.glass-dark {
+  background: linear-gradient(135deg, rgba(15, 42, 36, 0.55), rgba(15, 42, 36, 0.30));
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(217, 188, 130, 0.24);
+  border-top-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.6);
+  border-radius: 10px;
+  color: #F6EFE2;
 }
 
-/* Premium Gradients */
-.bg-mesh {
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(217,100%,50%,0.1) 0, transparent 50%),
-    radial-gradient(at 100% 100%, hsla(222,100%,50%,0.1) 0, transparent 50%);
+.glass-ivory {
+  background: linear-gradient(135deg, rgba(246, 239, 226, 0.72), rgba(246, 239, 226, 0.50));
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(184, 146, 74, 0.3);
+  box-shadow: 0 12px 36px -12px rgba(28, 20, 16, 0.15);
+  border-radius: 10px;
+  color: #1C1410;
 }
 
-.text-gradient {
-  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+@supports not (backdrop-filter: blur(1px)) {
+  .glass, .glass-dark {
+    background: rgba(15, 42, 36, 0.92);
+  }
+  .glass-ivory {
+    background: #F6EFE2;
+  }
+}
+
+/* Hairline and Border helpers */
+.border-gold-hairline {
+  border: 1px solid rgba(184, 146, 74, 0.45);
+}
+
+.border-gold-subtle {
+  border: 1px solid rgba(217, 188, 130, 0.25);
+}
+
+.arched-frame {
+  border-radius: 999px 999px 4px 4px;
 }
