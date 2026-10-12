@@ -12,8 +12,16 @@ const Checkout: React.FC = () => {
   const { user } = useAuth();
 
   const roomId = searchParams.get('roomId') || '';
-  const checkIn = searchParams.get('checkIn') || '';
-  const checkOut = searchParams.get('checkOut') || '';
+  
+  // Ensure default valid dates if not passed in query params
+  const today = new Date();
+  const defaultCheckIn = today.toISOString().split('T')[0];
+  const nextDay = new Date(today);
+  nextDay.setDate(today.getDate() + 2);
+  const defaultCheckOut = nextDay.toISOString().split('T')[0];
+
+  const [checkIn, setCheckIn] = useState(searchParams.get('checkIn') || defaultCheckIn);
+  const [checkOut, setCheckOut] = useState(searchParams.get('checkOut') || defaultCheckOut);
   const guests = parseInt(searchParams.get('guests') || '2');
 
   const [room, setRoom] = useState<Room | null>(null);
@@ -65,11 +73,25 @@ const Checkout: React.FC = () => {
       return;
     }
 
+    // Validate date constraints
+    if (!checkIn || !checkOut || checkOut <= checkIn) {
+      setErrorMessage('Check-out date must be strictly after check-in date.');
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage('');
 
     try {
-      // Direct insertion or RPC into Supabase bookings table
+      // Ensure user profile exists to satisfy foreign key user_id -> profiles(id)
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        full_name: fullName || user.email?.split('@')[0],
+        phone: phone || null,
+        role: 'guest',
+      });
+
+      // Insert reservation into Supabase bookings table
       const { data, error } = await supabase
         .from('bookings')
         .insert({
@@ -87,9 +109,10 @@ const Checkout: React.FC = () => {
         .single();
 
       if (error) {
-        // Double-booking exclusion constraint error
         if (error.code === '23P01' || error.message.includes('overlapping') || error.message.includes('no_overlapping_bookings')) {
           setErrorMessage('Sorry, this chamber is already reserved for these dates. Please choose other dates or select another chamber.');
+        } else if (error.message.includes('bookings_check') || error.message.includes('check constraint')) {
+          setErrorMessage('Check-out date must be later than check-in date. Please adjust your dates.');
         } else {
           setErrorMessage(error.message);
         }
@@ -168,6 +191,30 @@ const Checkout: React.FC = () => {
                 placeholder="+91 98200 00000"
                 className="w-full bg-[#F6EFE2] border border-[#B8924A]/40 rounded-[3px] text-[#1C1410] px-3 py-2 text-sm focus:outline-none focus:border-[#5B1A1F]"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="label-caps text-[#1C1410]/80 block mb-1">Check-In Date</label>
+                <input
+                  type="date"
+                  required
+                  value={checkIn}
+                  onChange={(e) => setCheckIn(e.target.value)}
+                  className="w-full bg-[#F6EFE2] border border-[#B8924A]/40 rounded-[3px] text-[#1C1410] px-3 py-2 text-sm focus:outline-none focus:border-[#5B1A1F]"
+                />
+              </div>
+
+              <div>
+                <label className="label-caps text-[#1C1410]/80 block mb-1">Check-Out Date</label>
+                <input
+                  type="date"
+                  required
+                  value={checkOut}
+                  onChange={(e) => setCheckOut(e.target.value)}
+                  className="w-full bg-[#F6EFE2] border border-[#B8924A]/40 rounded-[3px] text-[#1C1410] px-3 py-2 text-sm focus:outline-none focus:border-[#5B1A1F]"
+                />
+              </div>
             </div>
 
             <div>
